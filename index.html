@@ -158,7 +158,17 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .sale-item-num::before{content:'';width:20px;height:2px;background:var(--blue3);border-radius:2px}
 .item-del-btn{background:rgba(220,38,38,.12);border:1px solid rgba(248,113,113,.25);color:var(--red3);border-radius:8px;padding:4px 11px;font-size:12px;cursor:pointer;font-family:'Tajawal',sans-serif;transition:.2s}
 .item-del-btn:hover{background:rgba(220,38,38,.25)}
+/* إخفاء أسهم الزيادة والنقصان في متصفحات Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
+/* إخفاء الأسهم في متصفح Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+}
 /* Searchable select wrapper */
 .sel-wrap{position:relative}
 .sel-search{width:100%;padding:10px 13px;background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:var(--r);font-size:13px;color:var(--text);font-family:'Tajawal',sans-serif;outline:none;transition:.2s}
