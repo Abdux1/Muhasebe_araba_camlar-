@@ -833,14 +833,23 @@ let saleItems=[];
 let itemIdCounter=0;
 
 function addSaleItem(){
-  const id='item-'+(++itemIdCounter);
-  saleItems.push({id,prodId:'',qty:'',customPrice:null});
-  renderSaleItems();
-  // focus first empty product search after short delay
-  setTimeout(()=>{
-    const inp=document.querySelector('.item-prod-search:placeholder-shown,.item-prod-search');
-    if(inp)inp.focus();
-  },80);
+    const id = 'item-' + (++itemIdCounter);
+    saleItems.push({id, prodId: '', qty: '', customPrice: null});
+    renderSaleItems();
+
+    // الكود المطور للتركيز على آخر منتج مضاف
+    setTimeout(() => {
+        // نجلب جميع خانات البحث التي تحمل الكلاس الخاص بها
+        const allInputs = document.querySelectorAll('.item-prod-search');
+        // نختار آخر خانة (المنتج الجديد) باستخدام طول المصفوفة - 1
+        const lastInput = allInputs[allInputs.length - 1];
+        
+        if (lastInput) {
+            lastInput.focus();
+            // تمرير الصفحة بنعومة ليكون المنتج الجديد في منتصف الشاشة
+            lastInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 80);
 }
 
 function removeSaleItem(id){
