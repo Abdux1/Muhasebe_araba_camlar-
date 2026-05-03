@@ -692,6 +692,21 @@ input[type=number] {
 </div>
 
 <script>
+  // منع تغيير الأرقام عند الضغط على أسهم لوحة المفاتيح
+document.addEventListener("keydown", function(e) {
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        if (e.target.type === "number") {
+            e.preventDefault();
+        }
+    }
+});
+
+// منع تغيير الأرقام عند تحريك عجلة الماوس (اختياري ولكن ينصح به)
+document.addEventListener("wheel", function(e) {
+    if (document.activeElement.type === "number") {
+        document.activeElement.blur();
+    }
+});
 
 const CURR={USD:{sym:'$',name:'دولار أمريكي',rate:1},TRY:{sym:'₺',name:'ليرة تركية',rate:32.5},SYP:{sym:'ل.س',name:'ليرة سورية',rate:13000}};
 function fmtC(usd,cur){const v=usd*CURR[cur].rate;return CURR[cur].sym+' '+v.toLocaleString('ar-SA',{minimumFractionDigits:2,maximumFractionDigits:2});}
