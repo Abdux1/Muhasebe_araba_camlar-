@@ -1834,33 +1834,6 @@ function openWDModal(uid,name){
   }).catch(e=>{body.innerHTML=`<div class="empty">❌ ${e.message}</div>`;});
 }
 function closeWDModal(){document.getElementById('wallet-detail-modal').classList.remove('open');}
-  async function executeSmartDelete(invNo) {
-    if (!confirm(`هل أنت متأكد من حذف الفاتورة رقم ${invNo}؟ ستتم إعادة البضاعة وتعديل الحسابات.`)) return;
-    try {
-        const items = await GET(`/rest/v1/satislar?inv_no=eq.${invNo}`, CU.token);
-        if (!items || items.length === 0) return alert("لم يتم العثور على بيانات");
-        const info = items[0];
-        
-        // إعادة المخزون (تعديل stock إلى stok)
-        for (let item of items) {
-            const prod = await GET(`/rest/v1/urunler?id=eq.${item.urun_id}`, CU.token);
-            if (prod && prod[0]) {
-                await PATCH(`/rest/v1/urunler?id=eq.${item.urun_id}`, { stok: Number(prod[0].stok) + Number(item.miktar) }, CU.token);
-            }
-        }
-        
-        // خصم الدين (تعديل balance إلى total_debt)
-        if (info.customer_id) {
-             const cust = await GET(`/rest/v1/customers?id=eq.${info.customer_id}`, CU.token);
-             if (cust && cust[0]) await PATCH(`/rest/v1/customers?id=eq.${info.customer_id}`, { total_debt: Number(cust[0].total_debt) - Number(info.debt_amount || 0) }, CU.token);
-        }
-        
-        // الحذف النهائي
-        await DEL(`/rest/v1/satislar?inv_no=eq.${invNo}`, CU.token);
-        alert('تم الحذف بنجاح');
-        location.reload();
-    } catch (e) { alert('خطأ: ' + e.message); }
-}
 init();
 </script>
 </body>
