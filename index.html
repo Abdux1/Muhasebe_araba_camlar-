@@ -1842,56 +1842,75 @@ function openWDModal(uid,name){
 }
 function closeWDModal(){document.getElementById('wallet-detail-modal').classList.remove('open');}
 async function executeSmartDelete(invNo) {
-    if (!confirm(`هل أنت متأكد من حذف الفاتورة رقم ${invNo}؟ ستتم إعادة البضاعة وتعديل الحسابات.`)) return;
+    if (!confirm(`هل أنت متأكد من حذف الفاتورة رقم ${invNo}؟`)) return;
 
-    // 1. البيانات الأساسية (تأكد من وضع Anon Key الحقيقي هنا)
+    // 1. تأكد من وضع قيمك الحقيقية هنا
     const SB_URL = 'https://yohnfrsxgjbkwulhhwgs.supabase.co'; 
-    const SB_KEY = 'sb_publishable_e7i6uN-Qhixq6PaH_0XPUw_l7N8mwhm'; 
+    const SB_KEY = 'ضع_هنا_الـ_Anon_Key_الخاص_بك'; 
 
-    // 2. تعريف الهيدرز باسم واضح لمرة واحدة فقط
-    const fetchOptions = {
-        method: 'GET',
-        headers: {
-            'apikey': SB_KEY,
-            'Authorization': `Bearer ${SB_KEY}`,
-            'Content-Type': 'application/json'
-        }
+    const headers = {
+        'apikey': SB_KEY,
+        'Authorization': `Bearer ${SB_KEY}`,
+        'Content-Type': 'application/json'
     };
 
     try {
-        // أ- البحث عن الفاتورة
-        const res = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${invNo}`, fetchOptions);
-        const data = await res.json();
+        // تحويل رقم الفاتورة لنص وإزالة الفراغات لضمان المطابقة
+        const cleanInvNo = String(invNo).trim();
+        console.log("Searching for Invoice:", cleanInvNo);
 
+        // جلب البيانات مع تحديد الأعمدة المطلوبة بدقة
+        const response = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}&select=*`, { 
+            method: 'GET', 
+            headers: headers 
+        });
+
+        const data = await response.json();
+
+        // تشخيص: إذا كانت المصفوفة فارغة
         if (!data || data.length === 0) {
-            alert("لم يتم العثور على بيانات الفاتورة في السجل.");
+            console.error("No data found for this ID. Check RLS or Column Name.");
+            alert("⚠️ السجل موجود في المتصفح لكنه غير موجود في قاعدة البيانات.\n\nتأكد من:\n1. أن حسابك 'active' في جدول profiles.\n2. أن رقم الفاتورة صحيحة في Supabase.");
             return;
         }
 
-        // ب- تحديث المخزون وحذف الفاتورة (باقي المنطق)
-        alert("جاري الحذف وإعادة المخزون...");
-        
-        // ملاحظة: هنا نستخدم نفس fetchOptions مع تغيير الـ method عند الحاجة
+        const info = data[0];
+        alert(`تم العثور على الفاتورة. جاري إعادة ${data.length} صنف للمخزن...`);
+
+        // تنفيذ إعادة المخزون
         for (let item of data) {
-             // منطق تحديث المخزون هنا...
+            if (item.urun_id) {
+                // جلب الكمية الحالية في المخزن
+                const pRes = await fetch(`${SB_URL}/rest/v1/urunler?id=eq.${item.urun_id}`, { method: 'GET', headers });
+                const pData = await pRes.json();
+                
+                if (pData && pData[0]) {
+                    const newQty = Number(pData[0].stok) + Number(item.miktar);
+                    await fetch(`${SB_URL}/rest/v1/urunler?id=eq.${item.urun_id}`, {
+                        method: 'PATCH',
+                        headers,
+                        body: JSON.stringify({ stok: newQty })
+                    });
+                }
+            }
         }
 
-        // ج- الحذف النهائي
-        const delRes = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${invNo}`, {
+        // الحذف النهائي
+        const delRes = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}`, {
             method: 'DELETE',
-            headers: fetchOptions.headers
+            headers
         });
 
         if (delRes.ok) {
-            alert('✅ تم الحذف بنجاح');
+            alert('✅ تم الحذف وتحديث المخزن بنجاح!');
             location.reload();
         }
 
-    } catch (err) {
-        alert('❌ فشلت العملية: ' + err.message);
+    } catch (e) {
+        alert('❌ خطأ فني: ' + e.message);
     }
 }
-  init();
+init();
 </script>
 </body>
 </html>
