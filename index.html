@@ -1842,11 +1842,10 @@ function openWDModal(uid,name){
 }
 function closeWDModal(){document.getElementById('wallet-detail-modal').classList.remove('open');}
 async function executeSmartDelete(invNo) {
-    if (!confirm(`هل أنت متأكد من حذف الفاتورة رقم ${invNo}؟`)) return;
+    if (!confirm(`تحذير: سيتم حذف الفاتورة رقم ${invNo}، إعادة البضاعة للمخزن، خصم الدين من العميل، وسحب الدفعة من محفظة الموظف. هل أنت متأكد؟`)) return;
 
-    // 1. تأكد من وضع قيمك الحقيقية هنا
     const SB_URL = 'https://yohnfrsxgjbkwulhhwgs.supabase.co'; 
-    const SB_KEY = 'sb_publishable_e7i6uN-Qhixq6PaH_0XPUw_l7N8mwhm'; 
+    const SB_KEY = 'ضع_هنا_مفتاح_الـ_Anon_Key_الخاص_بك'; 
 
     const headers = {
         'apikey': SB_KEY,
@@ -1855,35 +1854,27 @@ async function executeSmartDelete(invNo) {
     };
 
     try {
-        // تحويل رقم الفاتورة لنص وإزالة الفراغات لضمان المطابقة
         const cleanInvNo = String(invNo).trim();
-        console.log("Searching for Invoice:", cleanInvNo);
-
-        // جلب البيانات مع تحديد الأعمدة المطلوبة بدقة
-        const response = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}&select=*`, { 
-            method: 'GET', 
-            headers: headers 
-        });
-
+        // جلب بيانات الفاتورة
+        const response = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}`, { method: 'GET', headers });
         const data = await response.json();
 
-        // تشخيص: إذا كانت المصفوفة فارغة
-        if (!data || data.length === 0) {
-            console.error("No data found for this ID. Check RLS or Column Name.");
-            alert("⚠️ السجل موجود في المتصفح لكنه غير موجود في قاعدة البيانات.\n\nتأكد من:\n1. أن حسابك 'active' في جدول profiles.\n2. أن رقم الفاتورة صحيحة في Supabase.");
-            return;
-        }
+        if (!data || data.length === 0) return alert("لم يتم العثور على بيانات الفاتورة.");
 
-        const info = data[0];
-        alert(`تم العثور على الفاتورة. جاري إعادة ${data.length} صنف للمخزن...`);
+        // قيم تجميعية للعملية
+        let totalDebtToSubtract = 0;
+        let totalPaidToSubtract = 0;
+        let customerId = data[0].customer_id;
+        let employeeId = data[0].kullanici_id; // معرف الموظف الذي باع
 
-        // تنفيذ إعادة المخزون
         for (let item of data) {
+            totalDebtToSubtract += Number(item.debt_amount || 0);
+            totalPaidToSubtract += Number(item.paid_amount || 0);
+
+            // 1. إعادة المخزون
             if (item.urun_id) {
-                // جلب الكمية الحالية في المخزن
                 const pRes = await fetch(`${SB_URL}/rest/v1/urunler?id=eq.${item.urun_id}`, { method: 'GET', headers });
                 const pData = await pRes.json();
-                
                 if (pData && pData[0]) {
                     const newQty = Number(pData[0].stok) + Number(item.miktar);
                     await fetch(`${SB_URL}/rest/v1/urunler?id=eq.${item.urun_id}`, {
@@ -1895,19 +1886,50 @@ async function executeSmartDelete(invNo) {
             }
         }
 
-        // الحذف النهائي
+        // 2. تحديث رصيد العميل (خصم الدين المتبقي فقط)
+        if (customerId && totalDebtToSubtract > 0) {
+            const cRes = await fetch(`${SB_URL}/rest/v1/customers?id=eq.${customerId}`, { method: 'GET', headers });
+            const cData = await cRes.json();
+            if (cData && cData[0]) {
+                const updatedDebt = Math.max(0, Number(cData[0].debt || 0) - totalDebtToSubtract);
+                await fetch(`${SB_URL}/rest/v1/customers?id=eq.${customerId}`, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({ debt: updatedDebt })
+                });
+            }
+        }
+
+        // 3. تحديث محفظة الموظف (خصم المبلغ الذي قبضه "كاش")
+        if (employeeId && totalPaidToSubtract > 0) {
+            const eRes = await fetch(`${SB_URL}/rest/v1/profiles?id=eq.${employeeId}`, { method: 'GET', headers });
+            const eData = await eRes.json();
+            // ملاحظة: افترضنا أن اسم العمود في جدول profiles هو wallet_balance
+            if (eData && eData[0]) {
+                const currentWallet = Number(eData[0].wallet_balance || 0);
+                const updatedWallet = currentWallet - totalPaidToSubtract;
+                
+                await fetch(`${SB_URL}/rest/v1/profiles?id=eq.${employeeId}`, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({ wallet_balance: updatedWallet })
+                });
+            }
+        }
+
+        // 4. حذف الفاتورة نهائياً
         const delRes = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}`, {
             method: 'DELETE',
             headers
         });
 
         if (delRes.ok) {
-            alert('✅ تم الحذف وتحديث المخزن بنجاح!');
+            alert('✅ عملية حذف ناجحة ومكتملة مالياً ومخزنياً.');
             location.reload();
         }
 
     } catch (e) {
-        alert('❌ خطأ فني: ' + e.message);
+        alert('❌ خطأ في العملية: ' + e.message);
     }
 }
 init();
