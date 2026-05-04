@@ -1842,7 +1842,7 @@ function openWDModal(uid,name){
 }
 function closeWDModal(){document.getElementById('wallet-detail-modal').classList.remove('open');}
 async function executeSmartDelete(invNo) {
-    if (!confirm(`تحذير: سيتم حذف الفاتورة رقم ${invNo}، إعادة البضاعة للمخزن، خصم الدين من العميل، وسحب الدفعة من محفظة الموظف. هل أنت متأكد؟`)) return;
+    if (!confirm(`هل أنت متأكد؟ سيتم حذف الفاتورة ${invNo}، إعادة البضاعة، خصم الدين من العميل، وسحب الدفعة من محفظتك.`)) return;
 
     const SB_URL = 'https://yohnfrsxgjbkwulhhwgs.supabase.co'; 
     const SB_KEY = 'sb_publishable_e7i6uN-Qhixq6PaH_0XPUw_l7N8mwhm'; 
@@ -1855,23 +1855,22 @@ async function executeSmartDelete(invNo) {
 
     try {
         const cleanInvNo = String(invNo).trim();
-        // جلب بيانات الفاتورة
+        // 1. جلب بيانات الفاتورة لمعرفة العميل والموظف والمبالغ
         const response = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}`, { method: 'GET', headers });
         const data = await response.json();
 
-        if (!data || data.length === 0) return alert("لم يتم العثور على بيانات الفاتورة.");
+        if (!data || data.length === 0) return alert("الفاتورة غير موجودة في قاعدة البيانات.");
 
-        // قيم تجميعية للعملية
         let totalDebtToSubtract = 0;
         let totalPaidToSubtract = 0;
         let customerId = data[0].customer_id;
-        let employeeId = data[0].kullanici_id; // معرف الموظف الذي باع
+        let employeeId = data[0].kullanici_id; 
 
         for (let item of data) {
             totalDebtToSubtract += Number(item.debt_amount || 0);
             totalPaidToSubtract += Number(item.paid_amount || 0);
 
-            // 1. إعادة المخزون
+            // 2. إعادة المخزون لجدول urunler
             if (item.urun_id) {
                 const pRes = await fetch(`${SB_URL}/rest/v1/urunler?id=eq.${item.urun_id}`, { method: 'GET', headers });
                 const pData = await pRes.json();
@@ -1886,7 +1885,7 @@ async function executeSmartDelete(invNo) {
             }
         }
 
-        // 2. تحديث رصيد العميل (خصم الدين المتبقي فقط)
+        // 3. خصم الدين من جدول customers
         if (customerId && totalDebtToSubtract > 0) {
             const cRes = await fetch(`${SB_URL}/rest/v1/customers?id=eq.${customerId}`, { method: 'GET', headers });
             const cData = await cRes.json();
@@ -1900,39 +1899,36 @@ async function executeSmartDelete(invNo) {
             }
         }
 
-        // 3. تحديث محفظة الموظف (خصم المبلغ الذي قبضه "كاش")
+        // 4. خصم الدفعة من محفظة الموظف في جدول profiles
         if (employeeId && totalPaidToSubtract > 0) {
             const eRes = await fetch(`${SB_URL}/rest/v1/profiles?id=eq.${employeeId}`, { method: 'GET', headers });
             const eData = await eRes.json();
-            // ملاحظة: افترضنا أن اسم العمود في جدول profiles هو wallet_balance
             if (eData && eData[0]) {
-                const currentWallet = Number(eData[0].wallet_balance || 0);
-                const updatedWallet = currentWallet - totalPaidToSubtract;
-                
+                const updatedWallet = Number(eData[0].wallet_balance || 0) - totalPaidToSubtract;
                 await fetch(`${SB_URL}/rest/v1/profiles?id=eq.${employeeId}`, {
                     method: 'PATCH',
                     headers,
-                    body: JSON.stringify({ wallet_balance: updatedWallet })
+                    body: JSON.stringify({ wallet_balance: updatedWallet }) 
                 });
             }
         }
 
-        // 4. حذف الفاتورة نهائياً
+        // 5. الحذف النهائي من satislar
         const delRes = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}`, {
             method: 'DELETE',
             headers
         });
 
         if (delRes.ok) {
-            alert('✅ عملية حذف ناجحة ومكتملة مالياً ومخزنياً.');
+            alert('✅ تم تنفيذ العملية بنجاح وتحديث كافة السجلات الملحقة.');
             location.reload();
         }
 
     } catch (e) {
-        alert('❌ خطأ في العملية: ' + e.message);
+        alert('❌ خطأ فني: ' + e.message);
     }
 }
-init();
+  init();
 </script>
 </body>
 </html>
