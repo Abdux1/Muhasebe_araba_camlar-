@@ -1842,7 +1842,7 @@ function openWDModal(uid,name){
 }
 function closeWDModal(){document.getElementById('wallet-detail-modal').classList.remove('open');}
 async function executeSmartDelete(invNo) {
-    if (!confirm(`تحذير نهائي: سيتم حذف الفاتورة رقم ${invNo}.\n- سيتم إعادة البضاعة للمخزن.\n- سيتم خصم الدين من العميل.\n- سيتم تسجيل حركة سحب من المحفظة.`)) return;
+    if (!confirm(`سيتم حذف الفاتورة رقم ${invNo} وتعديل كافة الحسابات. هل أنت متأكد؟`)) return;
 
     const SB_URL = 'https://yohnfrsxgjbkwulhhwgs.supabase.co'; 
     const SB_KEY = 'sb_publishable_e7i6uN-Qhixq6PaH_0XPUw_l7N8mwhm'; 
@@ -1850,11 +1850,13 @@ async function executeSmartDelete(invNo) {
     const headers = {
         'apikey': SB_KEY,
         'Authorization': `Bearer ${SB_KEY}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
     };
 
     try {
         const cleanInvNo = String(invNo).trim();
+        // 1. جلب بيانات الفاتورة لمعرفة الـ ID الخاص بالعميل والموظف
         const response = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}`, { method: 'GET', headers });
         const data = await response.json();
 
@@ -1862,15 +1864,16 @@ async function executeSmartDelete(invNo) {
 
         let totalDebtToSubtract = 0;
         let totalPaidToSubtract = 0;
-        let customerId = data[0].customer_id;
-        let userId = data[0].kullanici_id;
-        let userName = data[0].kullanici_ad || 'موظف';
+        const customerId = data[0].customer_id; // الـ UUID الخاص بالعميل
+        const userId = data[0].kullanici_id;   // الـ UUID الخاص بالموظف
+        const userName = data[0].kullanici_ad || 'System';
 
+        // 2. معالجة كل بند في الفاتورة
         for (let item of data) {
             totalDebtToSubtract += Number(item.debt_amount || 0);
             totalPaidToSubtract += Number(item.paid_amount || 0);
 
-            // 1. إعادة المخزون (جدول urunler)
+            // إعادة المخزون (جدول urunler)
             if (item.urun_id) {
                 const pRes = await fetch(`${SB_URL}/rest/v1/urunler?id=eq.${item.urun_id}`, { method: 'GET', headers });
                 const pData = await pRes.json();
@@ -1885,7 +1888,7 @@ async function executeSmartDelete(invNo) {
             }
         }
 
-        // 2. تحديث دين العميل (جدول customers - العمود الصحيح: total_debt)
+        // 3. تحديث دين العميل (العمود الصحيح هو total_debt)
         if (customerId && totalDebtToSubtract > 0) {
             const cRes = await fetch(`${SB_URL}/rest/v1/customers?id=eq.${customerId}`, { method: 'GET', headers });
             const cData = await cRes.json();
@@ -1899,8 +1902,7 @@ async function executeSmartDelete(invNo) {
             }
         }
 
-        // 3. معالجة المحفظة (جدول wallet_transactions)
-        // بما أن نظامك يعتمد على سجل العمليات، سنقوم بإضافة عملية "عكسية" لخصم المبلغ
+        // 4. إضافة حركة "مصروف" لخصم المبلغ من المحفظة
         if (userId && totalPaidToSubtract > 0) {
             await fetch(`${SB_URL}/rest/v1/wallet_transactions`, {
                 method: 'POST',
@@ -1908,27 +1910,28 @@ async function executeSmartDelete(invNo) {
                 body: JSON.stringify({
                     user_id: userId,
                     user_name: userName,
-                    type: 'expense', // تسجيلها كمصروف لعكس الدخل الذي دخل سابقاً
+                    type: 'expense',
                     amount: totalPaidToSubtract,
-                    description: `إلغاء دفعة فاتورة محذوفة رقم: ${cleanInvNo}`,
+                    description: `إلغاء دفعة فاتورة رقم: ${cleanInvNo}`,
                     related_id: data[0].id
                 })
             });
         }
 
-        // 4. حذف الفاتورة نهائياً
+        // 5. الحذف النهائي من satislar
         const delRes = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}`, {
             method: 'DELETE',
             headers
         });
 
         if (delRes.ok) {
-            alert('✅ تم الحذف بنجاح وتعديل المخزون ودين العميل وسجل المحفظة.');
+            alert('✅ تم الحذف بنجاح: تم تحديث المخزن، خصم الدين، وتسجيل حركة المحفظة.');
             location.reload();
         }
 
     } catch (e) {
-        alert('❌ خطأ: ' + e.message);
+        console.error("Error details:", e);
+        alert('❌ فشلت العملية: ' + e.message);
     }
 }
   init();
