@@ -1843,10 +1843,9 @@ function openWDModal(uid,name){
 function closeWDModal(){document.getElementById('wallet-detail-modal').classList.remove('open');}
 async function executeSmartDelete(invNo) {
     if (!confirm(`هل أنت متأكد من حذف الفاتورة رقم ${invNo}؟ ستتم إعادة البضاعة وتعديل الحسابات.`)) return;
-
-    // 1. جلب بيانات الربط والتحقق منها (بكل المسميات المحتملة)
-    const SUPABASE_URL = localStorage.getItem('sb-url') || localStorage.getItem('supabaseUrl');
-    const SUPABASE_KEY = localStorage.getItem('sb-key') || localStorage.getItem('supabaseKey');
+// 1. جلب بيانات الربط (كتابة مباشرة لضمان عدم حدوث خطأ null)
+    const SUPABASE_URL = 'https://yohnfrsxgjbkulhhwgs.supabase.co'; 
+    const SUPABASE_KEY = 'sb_publishable_e7i6uN-Qhixq6PaH_0XPUw_l7N8mwhm';
 
     // منع حدوث خطأ null في الرابط
     if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_URL === "null") {
