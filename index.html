@@ -1842,11 +1842,10 @@ function openWDModal(uid,name){
 }
 function closeWDModal(){document.getElementById('wallet-detail-modal').classList.remove('open');}
 async function executeSmartDelete(invNo) {
-    // رسالة تأكيد قبل التنفيذ
-    if (!confirm(`تحذير: سيتم حذف الفاتورة رقم ${invNo}.\n1. ستعود البضاعة للمخزن.\n2. سيخصم الدين من رصيد العميل.\n3. ستسحب الدفعة الأولى من محفظتك.`)) return;
+    if (!confirm(`تحذير نهائي: سيتم حذف الفاتورة رقم ${invNo}.\n- سيتم إعادة البضاعة للمخزن.\n- سيتم خصم الدين من العميل.\n- سيتم تسجيل حركة سحب من المحفظة.`)) return;
 
     const SB_URL = 'https://yohnfrsxgjbkwulhhwgs.supabase.co'; 
-    const SB_KEY = 'sb_publishable_e7i6uN-Qhixq6PaH_0XPUw_l7N8mwhm'; // ضع مفتاح الـ Anon Key هنا
+    const SB_KEY = 'sb_publishable_e7i6uN-Qhixq6PaH_0XPUw_l7N8mwhm'; 
 
     const headers = {
         'apikey': SB_KEY,
@@ -1856,27 +1855,22 @@ async function executeSmartDelete(invNo) {
 
     try {
         const cleanInvNo = String(invNo).trim();
-        console.log("بدء البحث عن الفاتورة:", cleanInvNo);
-
-        // 1. جلب بيانات الفاتورة بالكامل
         const response = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}`, { method: 'GET', headers });
         const data = await response.json();
 
-        if (!data || data.length === 0) {
-            return alert("خطأ: لم يتم العثور على الفاتورة في قاعدة البيانات.");
-        }
+        if (!data || data.length === 0) return alert("الفاتورة غير موجودة.");
 
         let totalDebtToSubtract = 0;
         let totalPaidToSubtract = 0;
         let customerId = data[0].customer_id;
-        let employeeId = data[0].kullanici_id; 
+        let userId = data[0].kullanici_id;
+        let userName = data[0].kullanici_ad || 'موظف';
 
-        // 2. معالجة بنود الفاتورة (المخزون + تجميع المبالغ)
         for (let item of data) {
             totalDebtToSubtract += Number(item.debt_amount || 0);
             totalPaidToSubtract += Number(item.paid_amount || 0);
 
-            // تحديث المخزن لكل منتج في الفاتورة
+            // 1. إعادة المخزون (جدول urunler)
             if (item.urun_id) {
                 const pRes = await fetch(`${SB_URL}/rest/v1/urunler?id=eq.${item.urun_id}`, { method: 'GET', headers });
                 const pData = await pRes.json();
@@ -1891,54 +1885,50 @@ async function executeSmartDelete(invNo) {
             }
         }
 
-        // 3. تحديث رصيد العميل (خصم الدين) في جدول customers
+        // 2. تحديث دين العميل (جدول customers - العمود الصحيح: total_debt)
         if (customerId && totalDebtToSubtract > 0) {
             const cRes = await fetch(`${SB_URL}/rest/v1/customers?id=eq.${customerId}`, { method: 'GET', headers });
             const cData = await cRes.json();
             if (cData && cData[0]) {
-                // ملاحظة: تأكد أن اسم العمود في جدولك هو 'debt'
-                const updatedDebt = Math.max(0, Number(cData[0].debt || 0) - totalDebtToSubtract);
+                const updatedDebt = Math.max(0, Number(cData[0].total_debt || 0) - totalDebtToSubtract);
                 await fetch(`${SB_URL}/rest/v1/customers?id=eq.${customerId}`, {
                     method: 'PATCH',
                     headers,
-                    body: JSON.stringify({ debt: updatedDebt })
+                    body: JSON.stringify({ total_debt: updatedDebt })
                 });
-                console.log(`تم تحديث دين العميل. الرصيد الجديد: ${updatedDebt}`);
             }
         }
 
-        // 4. تحديث محفظة الموظف (سحب الدفعة) في جدول profiles
-        if (employeeId && totalPaidToSubtract > 0) {
-            const eRes = await fetch(`${SB_URL}/rest/v1/profiles?id=eq.${employeeId}`, { method: 'GET', headers });
-            const eData = await eRes.json();
-            if (eData && eData[0]) {
-                // ملاحظة: تأكد أن اسم العمود في جدولك هو 'wallet_balance'
-                const updatedWallet = Number(eData[0].wallet_balance || 0) - totalPaidToSubtract;
-                await fetch(`${SB_URL}/rest/v1/profiles?id=eq.${employeeId}`, {
-                    method: 'PATCH',
-                    headers,
-                    body: JSON.stringify({ wallet_balance: updatedWallet })
-                });
-                console.log(`تم تحديث المحفظة. الرصيد الجديد: ${updatedWallet}`);
-            }
+        // 3. معالجة المحفظة (جدول wallet_transactions)
+        // بما أن نظامك يعتمد على سجل العمليات، سنقوم بإضافة عملية "عكسية" لخصم المبلغ
+        if (userId && totalPaidToSubtract > 0) {
+            await fetch(`${SB_URL}/rest/v1/wallet_transactions`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    user_id: userId,
+                    user_name: userName,
+                    type: 'expense', // تسجيلها كمصروف لعكس الدخل الذي دخل سابقاً
+                    amount: totalPaidToSubtract,
+                    description: `إلغاء دفعة فاتورة محذوفة رقم: ${cleanInvNo}`,
+                    related_id: data[0].id
+                })
+            });
         }
 
-        // 5. الحذف النهائي للفاتورة من جدول المبيعات
+        // 4. حذف الفاتورة نهائياً
         const delRes = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${cleanInvNo}`, {
             method: 'DELETE',
             headers
         });
 
         if (delRes.ok) {
-            alert('✅ اكتملت العملية: تم حذف الفاتورة، إعادة البضاعة، وتعديل كافة الحسابات المالية.');
+            alert('✅ تم الحذف بنجاح وتعديل المخزون ودين العميل وسجل المحفظة.');
             location.reload();
-        } else {
-            throw new Error("فشل حذف السجل من جدول المبيعات.");
         }
 
     } catch (e) {
-        console.error("خطأ أثناء التنفيذ:", e);
-        alert('❌ حدث خطأ: ' + e.message);
+        alert('❌ خطأ: ' + e.message);
     }
 }
   init();
