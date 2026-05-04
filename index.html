@@ -1483,6 +1483,13 @@ function viewInvGroup(grp){
     <div class="inv-tot"><div><div class="inv-tl">إجمالي الفاتورة</div><div style="font-size:11px;color:var(--blue4);opacity:.8;margin-top:3px">${pt} · ${scN}</div></div><div class="inv-tv">${fi(grand)}</div></div>
     ${totalDebt>0?`<div style="display:flex;justify-content:space-between;background:rgba(5,150,105,.1);border:1px solid rgba(52,211,153,.2);border-radius:10px;padding:10px 15px;margin-top:9px;font-size:13px"><span style="color:var(--green3);font-weight:700">✅ المبلغ المدفوع</span><b style="color:var(--green3)">${fi(totalPaid)}</b></div><div style="display:flex;justify-content:space-between;background:rgba(220,38,38,.1);border:1px solid rgba(248,113,113,.2);border-radius:10px;padding:10px 15px;margin-top:6px;font-size:13px"><span style="color:var(--red3);font-weight:700">⚠️ المتبقي (دَيْن)</span><b style="color:var(--red3)">${fi(totalDebt)}</b></div>`:''}
     <div class="inv-foot" style="border-top:1px solid rgba(34,197,94,.2);margin-top:14px;padding-top:12px;color:rgba(255,255,255,.4)">شكراً لتعاملكم معنا 🙏 · موظف البيع: <b style="color:rgba(255,255,255,.7)">${first.kullanici_ad||'—'}</b> · المنديل لزجاج السيارات · وكيل XYG</div>`;
+// إضافة زر الحذف في نهاية الفاتورة
+<div style="display:flex; gap:10px; margin-top:15px; padding:0 15px;">
+    <button onclick="executeSmartDelete('${first.inv_no}')" 
+            style="flex:1; background:#ef4444; color:white; border:none; padding:12px; border-radius:10px; font-weight:bold; cursor:pointer;">
+        🗑️ حذف الفاتورة وإعادة المخزون
+    </button>
+</div> 
   document.getElementById('inv-modal').classList.add('open');
 }
 function clearFilters(){document.getElementById('f-prod').value='';document.getElementById('f-date').value='';loadHistory();}
@@ -1836,6 +1843,30 @@ function closeWDModal(){document.getElementById('wallet-detail-modal').classList
 
 
 init();
+ async function executeSmartDelete(invNo) {
+    if (!confirm(`هل أنت متأكد من حذف الفاتورة رقم ${invNo}؟ ستتم إعادة البضاعة وتعديل الحسابات.`)) return;
+    try {
+        const items = await GET(`/rest/v1/satislar?inv_no=eq.${invNo}`, CU.token);
+        if (!items || items.length === 0) return alert("لم يتم العثور على بيانات");
+        const info = items[0];
+        // إعادة المخزون
+        for (let item of items) {
+            const prod = await GET(`/rest/v1/urunler?id=eq.${item.urun_id}`, CU.token);
+            if (prod && prod[0]) {
+                await PATCH(`/rest/v1/urunler?id=eq.${item.urun_id}`, { stock: Number(prod[0].stock) + Number(item.miktar) }, CU.token);
+            }
+        }
+        // خصم الدين والمدفوع
+        if (info.customer_id) {
+             const cust = await GET(`/rest/v1/customers?id=eq.${info.customer_id}`, CU.token);
+             if (cust && cust[0]) await PATCH(`/rest/v1/customers?id=eq.${info.customer_id}`, { balance: Number(cust[0].balance) - Number(info.debt_amount || 0) }, CU.token);
+        }
+        // الحذف النهائي
+        await DEL(`/rest/v1/satislar?inv_no=eq.${invNo}`, CU.token);
+        alert('تم الحذف بنجاح');
+        location.reload();
+    } catch (e) { alert('خطأ: ' + e.message); }
+}}
 
 </script>
 </body>
