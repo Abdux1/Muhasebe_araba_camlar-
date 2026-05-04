@@ -1857,12 +1857,11 @@ async function executeSmartDelete(invNo) {
     };
 
     try {
-        // أ- جلب بنود الفاتورة
-        const resSatis = await fetch(`${URL_BASE}/rest/v1/satislar?inv_no=eq.${invNo}`, { 
-            method: 'GET', 
-            headers: requestHeaders 
-        });
-        const items = await resSatis.json();
+      const response = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${String(invNo).trim()}`, { 
+      method: 'GET', 
+      headers: myHeaders 
+    });
+      const items = await resSatis.json();
 
         if (!items || items.length === 0) return alert("لم يتم العثور على بيانات الفاتورة");
 
