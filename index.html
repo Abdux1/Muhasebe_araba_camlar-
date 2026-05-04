@@ -1843,38 +1843,80 @@ function openWDModal(uid,name){
 function closeWDModal(){document.getElementById('wallet-detail-modal').classList.remove('open');}
   async function executeSmartDelete(invNo) {
     if (!confirm(`هل أنت متأكد من حذف الفاتورة رقم ${invNo}؟ ستتم إعادة البضاعة وتعديل الحسابات.`)) return;
+
+    // جلب بيانات الربط من التخزين المحلي
+    const SUPABASE_URL = localStorage.getItem('sb-url');
+    const SUPABASE_KEY = localStorage.getItem('sb-key');
+
+    const headers = {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+    };
+
     try {
-        // تأكد من وجود CU.token و دوال GET/PATCH/DEL في ملفك
-        const items = await GET(`/rest/v1/satislar?inv_no=eq.${invNo}`, CU.token);
-        if (!items || items.length === 0) return alert("لم يتم العثور على بيانات");
-        
+        // 1. جلب بنود الفاتورة
+        const resSatis = await fetch(`${SUPABASE_URL}/rest/v1/satislar?inv_no=eq.${invNo}`, { method: 'GET', headers });
+        const items = await resSatis.json();
+
+        if (!items || items.length === 0) return alert("لم يتم العثور على بيانات الفاتورة");
+
         const info = items[0];
-        
-        // إعادة المخزون
+
+        // 2. إعادة المخزون لكل منتج في الفاتورة
         for (let item of items) {
-            const prod = await GET(`/rest/v1/urunler?id=eq.${item.urun_id}`, CU.token);
-            if (prod && prod[0]) {
-                await PATCH(`/rest/v1/urunler?id=eq.${item.urun_id}`, { stok: Number(prod[0].stok) + Number(item.miktar) }, CU.token);
+            const resProd = await fetch(`${SUPABASE_URL}/rest/v1/urunler?id=eq.${item.urun_id}`, { method: 'GET', headers });
+            const prodData = await resProd.json();
+
+            if (prodData && prodData[0]) {
+                const currentStock = Number(prodData[0].stok || 0);
+                const soldQty = Number(item.miktar || 0);
+                
+                await fetch(`${SUPABASE_URL}/rest/v1/urunler?id=eq.${item.urun_id}`, {
+                    method: 'PATCH', // هنا وضعنا علامات الاقتباس لحل مشكلة PATCH is not defined
+                    headers,
+                    body: JSON.stringify({ stok: currentStock + soldQty })
+                });
             }
         }
-        
-        // تعديل رصيد العميل
-        if (info.customer_id) {
-             const cust = await GET(`/rest/v1/customers?id=eq.${info.customer_id}`, CU.token);
-             if (cust && cust[0]) {
-                 await PATCH(`/rest/v1/customers?id=eq.${info.customer_id}`, { total_debt: Number(cust[0].total_debt) - Number(info.debt_amount || 0) }, CU.token);
-             }
+
+        // 3. تعديل رصيد العميل (خصم الدين)
+        if (info.customer_id && Number(info.debt_amount) > 0) {
+            const resCust = await fetch(`${SUPABASE_URL}/rest/v1/customers?id=eq.${info.customer_id}`, { method: 'GET', headers });
+            const custData = await resCust.json();
+
+            if (custData && custData[0]) {
+                const currentDebt = Number(custData[0].total_debt || 0);
+                const invDebt = Number(info.debt_amount || 0);
+
+                await fetch(`${SUPABASE_URL}/rest/v1/customers?id=eq.${info.customer_id}`, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({ total_debt: currentDebt - invDebt })
+                });
+            }
         }
-        
-        await DEL(`/rest/v1/satislar?inv_no=eq.${invNo}`, CU.token);
-        alert('تم الحذف بنجاح');
-        location.reload();
-    } catch (e) { 
+
+        // 4. حذف الفاتورة نهائياً
+        const resDel = await fetch(`${SUPABASE_URL}/rest/v1/satislar?inv_no=eq.${invNo}`, {
+            method: 'DELETE',
+            headers
+        });
+
+        if (resDel.ok) {
+            alert('تم الحذف بنجاح وإعادة المخزون');
+            location.reload();
+        } else {
+            throw new Error('فشل حذف سجل الفاتورة من قاعدة البيانات');
+        }
+
+    } catch (e) {
         console.error(e);
-        alert('حدث خطأ أثناء الحذف: ' + e.message); 
+        alert('حدث خطأ أثناء الحذف: ' + e.message);
     }
 }
-init();
+  init();
 </script>
 </body>
 </html>
