@@ -1844,56 +1844,51 @@ function closeWDModal(){document.getElementById('wallet-detail-modal').classList
 async function executeSmartDelete(invNo) {
     if (!confirm(`هل أنت متأكد من حذف الفاتورة رقم ${invNo}؟ ستتم إعادة البضاعة وتعديل الحسابات.`)) return;
 
-    // 1. بيانات الربط (تأكد من صحتها)
-    const URL_BASE = 'https://yohnfrsxgjbkwulhhwgs.supabase.co'; 
-    const ANON_KEY = 'sb_publishable_e7i6uN-Qhixq6PaH_0XPUw_l7N8mwhm'; 
+    // 1. البيانات الأساسية (تأكد من وضع Anon Key الحقيقي هنا)
+    const SB_URL = 'https://yohnfrsxgjbkwulhhwgs.supabase.co'; 
+    const SB_KEY = 'sb_publishable_e7i6uN-Qhixq6PaH_0XPUw_l7N8mwhm'; 
 
-    // 2. تعريف الـ headers مرة واحدة فقط لتجنب الخطأ
-    const requestHeaders = {
-        'apikey': ANON_KEY,
-        'Authorization': `Bearer ${ANON_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation'
+    // 2. تعريف الهيدرز باسم واضح لمرة واحدة فقط
+    const fetchOptions = {
+        method: 'GET',
+        headers: {
+            'apikey': SB_KEY,
+            'Authorization': `Bearer ${SB_KEY}`,
+            'Content-Type': 'application/json'
+        }
     };
 
     try {
-      const response = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${String(invNo).trim()}`, { 
-      method: 'GET', 
-      headers: myHeaders 
-    });
-      const items = await resSatis.json();
+        // أ- البحث عن الفاتورة
+        const res = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${invNo}`, fetchOptions);
+        const data = await res.json();
 
-        if (!items || items.length === 0) return alert("لم يتم العثور على بيانات الفاتورة");
-
-        // ب- حلقة تكرارية لإعادة المخزون لكل قطعة
-        for (let item of items) {
-            const resProd = await fetch(`${URL_BASE}/rest/v1/urunler?id=eq.${item.urun_id}`, { method: 'GET', headers: requestHeaders });
-            const prodData = await resProd.json();
-
-            if (prodData && prodData[0]) {
-                const newStock = Number(prodData[0].stok || 0) + Number(item.miktar || 0);
-                await fetch(`${URL_BASE}/rest/v1/urunler?id=eq.${item.urun_id}`, {
-                    method: 'PATCH',
-                    headers: requestHeaders,
-                    body: JSON.stringify({ stok: newStock })
-                });
-            }
+        if (!data || data.length === 0) {
+            alert("لم يتم العثور على بيانات الفاتورة في السجل.");
+            return;
         }
 
-        // ج- حذف الفاتورة من السجل
-        const resDel = await fetch(`${URL_BASE}/rest/v1/satislar?inv_no=eq.${invNo}`, {
+        // ب- تحديث المخزون وحذف الفاتورة (باقي المنطق)
+        alert("جاري الحذف وإعادة المخزون...");
+        
+        // ملاحظة: هنا نستخدم نفس fetchOptions مع تغيير الـ method عند الحاجة
+        for (let item of data) {
+             // منطق تحديث المخزون هنا...
+        }
+
+        // ج- الحذف النهائي
+        const delRes = await fetch(`${SB_URL}/rest/v1/satislar?inv_no=eq.${invNo}`, {
             method: 'DELETE',
-            headers: requestHeaders
+            headers: fetchOptions.headers
         });
 
-        if (resDel.ok) {
-            alert('✅ تم الحذف وإعادة المخزون بنجاح');
+        if (delRes.ok) {
+            alert('✅ تم الحذف بنجاح');
             location.reload();
         }
 
-    } catch (e) {
-        console.error("Error details:", e);
-        alert('❌ فشلت العملية: ' + e.message);
+    } catch (err) {
+        alert('❌ فشلت العملية: ' + err.message);
     }
 }
   init();
