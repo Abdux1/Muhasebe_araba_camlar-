@@ -1368,6 +1368,14 @@ function showInvoice(s){
     <div class="inv-tot"><div><div class="inv-tl">إجمالي الفاتورة</div><div style="font-size:11px;color:var(--blue4);opacity:.8;margin-top:3px">${pt} · ${scN}</div></div><div class="inv-tv">${fi(s.tutar)}</div></div>
     ${s.debt_amount>0?`<div style="display:flex;justify-content:space-between;background:rgba(5,150,105,.1);border:1px solid rgba(52,211,153,.2);border-radius:10px;padding:10px 15px;margin-top:9px;font-size:13px"><span style="color:var(--green3);font-weight:700">✅ المبلغ المدفوع</span><b style="color:var(--green3)">${fi(s.paid_amount||0)}</b></div><div style="display:flex;justify-content:space-between;background:rgba(220,38,38,.1);border:1px solid rgba(248,113,113,.2);border-radius:10px;padding:10px 15px;margin-top:6px;font-size:13px"><span style="color:var(--red3);font-weight:700">⚠️ المتبقي (دَيْن)</span><b style="color:var(--red3)">${fi(s.debt_amount)}</b></div>`:''}
     <div class="inv-foot" style="border-top:1px solid rgba(34,197,94,.2);margin-top:14px;padding-top:12px;color:rgba(255,255,255,.4)">شكراً لتعاملكم معنا 🙏 · موظف البيع: <b style="color:rgba(255,255,255,.7)">${s.kullanici_ad||'—'}</b> · المنديل لزجاج السيارات · وكيل XYG</div>`;
+  // إضافة زر الحذف داخل دالة showInvoice
+document.getElementById('inv-content').innerHTML += `
+<div style="display:flex; gap:10px; margin-top:15px; padding:0 15px; position:relative; z-index:10;">
+    <button onclick="executeSmartDelete('${s.inv_no}')" 
+            style="flex:1; background:#ef4444; color:white; border:none; padding:12px; border-radius:10px; font-weight:bold; cursor:pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2);">
+        🗑️ حذف الفاتورة وإعادة المخزون
+    </button>
+</div>`;
   document.getElementById('inv-modal').classList.add('open');
 }
 function closeInv(){document.getElementById('inv-modal').classList.remove('open');}
@@ -1482,13 +1490,7 @@ function viewInvGroup(grp){
     ${first.notes?`<div style="background:rgba(217,119,6,.1);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:10px 14px;font-size:12px;color:#fcd34d;margin-bottom:13px">📝 <b>ملاحظات:</b> ${first.notes}</div>`:''}
     <div class="inv-tot"><div><div class="inv-tl">إجمالي الفاتورة</div><div style="font-size:11px;color:var(--blue4);opacity:.8;margin-top:3px">${pt} · ${scN}</div></div><div class="inv-tv">${fi(grand)}</div></div>
     ${totalDebt>0?`<div style="display:flex;justify-content:space-between;background:rgba(5,150,105,.1);border:1px solid rgba(52,211,153,.2);border-radius:10px;padding:10px 15px;margin-top:9px;font-size:13px"><span style="color:var(--green3);font-weight:700">✅ المبلغ المدفوع</span><b style="color:var(--green3)">${fi(totalPaid)}</b></div><div style="display:flex;justify-content:space-between;background:rgba(220,38,38,.1);border:1px solid rgba(248,113,113,.2);border-radius:10px;padding:10px 15px;margin-top:6px;font-size:13px"><span style="color:var(--red3);font-weight:700">⚠️ المتبقي (دَيْن)</span><b style="color:var(--red3)">${fi(totalDebt)}</b></div>`:''}
-    <div class="inv-foot" style="border-top:1px solid rgba(34,197,94,.2);margin-top:14px;padding-top:12px;color:rgba(255,255,255,.4)">شكراً لتعاملكم معنا 🙏 · موظف البيع: <b style="color:rgba(255,255,255,.7)">${first.kullanici_ad||'—'}</b> · المنديل لزجاج السيارات · وكيل XYG</div>
-<div style="display:flex; gap:10px; margin-top:15px; padding:0 15px;">
-    <button onclick="executeSmartDelete('${first.inv_no}')" 
-            style="flex:1; background:#ef4444; color:white; border:none; padding:12px; border-radius:10px; font-weight:bold; cursor:pointer;">
-        🗑️ حذف الفاتورة وإعادة المخزون
-    </button>
-</div>`;
+    <div class="inv-foot" style="border-top:1px solid rgba(34,197,94,.2);margin-top:14px;padding-top:12px;color:rgba(255,255,255,.4)">شكراً لتعاملكم معنا 🙏 · موظف البيع: <b style="color:rgba(255,255,255,.7)">${first.kullanici_ad||'—'}</b> · المنديل لزجاج السيارات · وكيل XYG</div>`;
     document.getElementById('inv-modal').classList.add('open');
 }
   function clearFilters(){document.getElementById('f-prod').value='';document.getElementById('f-date').value='';loadHistory();}
